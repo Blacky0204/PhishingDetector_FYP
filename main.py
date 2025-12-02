@@ -1,7 +1,7 @@
 # main.py
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, validator
 from urllib.parse import urlparse
 from sqlalchemy.orm import Session
@@ -9,6 +9,8 @@ from typing import List
 import pandas as pd
 import joblib
 import json
+import os
+import uvicorn
 
 from feature_extraction import extract_features
 from db import get_db, SearchHistory
@@ -21,7 +23,7 @@ app = FastAPI(title="Phishing Detection API", version="1.0")
 # CORS (frontend will call this API from browser)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # you can restrict later
+    allow_origins=["*"],   # later you can restrict if needed
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,17 +33,17 @@ app.add_middleware(
 # MODEL LOADING
 # -------------------------------------------------
 model = None
-MODEL_COLUMNS = None
+MODEL_COLUMNS: List[str] | None = None
 load_err = ""
 
 try:
-    pkg = joblib.load("phishing_model.pkl")
+    pkg = joblib.load("phishing_model.pkl")  # make sure this file name matches your .pkl
     model = pkg["model"]
     MODEL_COLUMNS = list(pkg["columns"])
     print(f"[INFO] Loaded model with {len(MODEL_COLUMNS)} columns.")
 except Exception as e:
     load_err = str(e)
-    print(f"[ERROR] {load_err}")
+    print(f"[ERROR] Failed to load model: {load_err}")
 
 
 def to_model_frame(features_dict: dict) -> pd.DataFrame:
@@ -70,7 +72,7 @@ class URLItem(BaseModel):
     def ensure_scheme(cls, v: str) -> str:
         """
         Ensure URL has http:// or https:// so urlparse() works properly.
-        The frontend already tries to enforce this, but we double-check here.
+        Frontend already enforces, but we double-check here.
         """
         v = v.strip()
         if not urlparse(v).scheme:
@@ -85,7 +87,7 @@ class FrontendLogItem(BaseModel):
 
 
 # -------------------------------------------------
-# Basic endpoints
+# BASIC ENDPOINTS
 # -------------------------------------------------
 @app.get("/health")
 def health():
@@ -94,9 +96,20 @@ def health():
     return {"status": "ok"}
 
 
+# 👉 Serve your frontend here
 @app.get("/", response_class=HTMLResponse)
 def home():
-    return "<h2>Phishing Detection API is running ✅</h2>"
+    """
+    Serve the main HTML UI.
+    Make sure index.html is in the same folder as main.py.
+    """
+    index_path = os.path.join(os.path.dirname(__file__), "index.html")
+    if not os.path.exists(index_path):
+        return HTMLResponse(
+            content="<h2>index.html not found next to main.py</h2>",
+            status_code=500,
+        )
+    return FileResponse(index_path)
 
 
 # -------------------------------------------------
@@ -172,7 +185,7 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
     # ----------------- MACHINE LEARNING PREDICTION -----------------
     feats = extract_features(url)
     df = to_model_frame(feats)
-    pred = int(model.predict(df)[0])      # 0 = safe, 1 = phishing (as in your dataset)
+    pred = int(model.predict(df)[0])      # 0 = safe, 1 = phishing
     conf = None
 
     if hasattr(model, "predict_proba"):
@@ -189,18 +202,18 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
 
     # ----------------- FEATURE-BASED EXPLANATIONS -----------------
     try:
-        # The same features you’re using on the frontend
-        if df["NumSensitiveWords"].iloc[0] > 0:
+        # These names align with your frontend's describeFeatureImpact()
+        if "NumSensitiveWords" in df.columns and df["NumSensitiveWords"].iloc[0] > 0:
             explanations.append(
                 "Contains words like login/secure/account, which are common in phishing pages."
             )
-        if df["NoHttps"].iloc[0] == 1:
+        if "NoHttps" in df.columns and df["NoHttps"].iloc[0] == 1:
             explanations.append("Not using HTTPS (connection not secure).")
-        if df["SubdomainLevel"].iloc[0] >= 2:
+        if "SubdomainLevel" in df.columns and df["SubdomainLevel"].iloc[0] >= 2:
             explanations.append("Has many subdomains, which can be used to mimic legitimate sites.")
-        if df["NumDash"].iloc[0] >= 2:
+        if "NumDash" in df.columns and df["NumDash"].iloc[0] >= 2:
             explanations.append("Contains several '-' characters, often used in spoofed domains.")
-        if df["IpAddress"].iloc[0] == 1:
+        if "IpAddress" in df.columns and df["IpAddress"].iloc[0] == 1:
             explanations.append("Uses an IP address instead of a normal domain name, which is suspicious.")
     except Exception:
         # If any column name mismatch happens, just skip explanation section.
@@ -217,7 +230,6 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
 
     # ----------------- ML TOP FEATURE SNAPSHOT (for Option C table) -----------------
     try:
-        # These names match what your frontend expects in describeFeatureImpact()
         candidate_features = [
             "NoHttps",
             "NumSensitiveWords",
@@ -231,20 +243,28 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
         for name in candidate_features:
             if name in df.columns:
                 val = df[name].iloc[0]
-                # cast to plain Python type (not numpy)
                 if hasattr(val, "item"):
                     val = val.item()
                 top_features.append({"name": name, "value": val})
     except Exception as e:
         print(f"[WARN] Failed building top_features: {e}")
-        # in worst case, just leave top_features empty
 
+    # save in DB with the *model* label (pred)
     _save_history(db, url, pred, result, conf, explanations)
     return _build_response(url, result, pred, conf, explanations, top_features)
 
 
-def _save_history(db: Session, url: str, label: int, prediction: str,
-                  confidence, explanations: List[str]):
+# -------------------------------------------------
+# HELPERS FOR HISTORY + RESPONSE
+# -------------------------------------------------
+def _save_history(
+    db: Session,
+    url: str,
+    label: int,
+    prediction: str,
+    confidence,
+    explanations: List[str],
+):
     """Helper to save one record into SearchHistory."""
     try:
         new_search = SearchHistory(
@@ -299,7 +319,6 @@ def get_history(limit: int = 50, db: Session = Depends(get_db)):
         try:
             expl = json.loads(r.explanation) if r.explanation else []
         except Exception:
-            # fallback – keep raw string in an array
             expl = [str(r.explanation)]
 
         history_list.append(
@@ -310,7 +329,6 @@ def get_history(limit: int = 50, db: Session = Depends(get_db)):
                 "prediction": r.prediction,
                 "confidence": r.confidence,
                 "explanation": expl,
-                # kept for future expansion, even if UI doesn't show it
                 "created_at": getattr(r, "created_at", None),
             }
         )
@@ -355,15 +373,23 @@ def log_frontend_result(item: FrontendLogItem, db: Session = Depends(get_db)):
             url=item.url,
             label=label,
             prediction=item.prediction,          # e.g. "Phishing (frontend dash+brand rule)"
-            confidence=1.0,                      # treat frontend rule as 100% confident (avoids NULL)
+            confidence=1.0,                      # treat frontend rule as 100% confident
             explanation=json.dumps(item.explanation or []),
         )
-
         db.add(new_row)
         db.commit()
 
         print(f"[INFO] Logged frontend phishing: {item.url} -> {item.prediction}")
         return {"status": "ok", "message": "saved"}
     except Exception as e:
+        db.rollback()
         print(f"[ERROR] Failed to save frontend history: {e}")
         raise HTTPException(status_code=500, detail="Failed to save frontend history")
+
+
+# -------------------------------------------------
+# RUN (for local and Railway)
+# -------------------------------------------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
