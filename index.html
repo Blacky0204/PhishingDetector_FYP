@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phishing Website Detection</title>
+
+  <!-- FAVICON -->
+  <link rel="icon" href="https://img.icons8.com/color/48/shield.png" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(37, 99, 235, 0.2);
+      padding: 60px 60px;
+      max-width: 900px;
+      width: 100%;
+      animation: fadeIn 0.5s ease-in;
+      border: 1px solid rgba(37, 99, 235, 0.1);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .header {
+      margin-bottom: 40px;
+    }
+
+    .shield-icon {
+      font-size: 56px;
+      display: inline-block;
+      margin-bottom: 15px;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+
+    h1 {
+      color: #0F172A;
+      font-size: 32px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: #64748B;
+      font-size: 16px;
+    }
+
+    .input-group {
+      margin-bottom: 30px;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    input {
+      flex: 1;
+      min-width: 200px;
+      padding: 15px 20px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      font-size: 16px;
+      transition: all 0.3s ease;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #2563EB;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    }
+
+    input::placeholder {
+      color: #999;
+    }
+
+    button {
+      padding: 15px 24px;
+      background: linear-gradient(135deg, #2563EB 0%, #06B6D4 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+      white-space: nowrap;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+      background: linear-gradient(135deg, #1d4ed8 0%, #0891b2 100%);
+    }
+
+    button:active {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* PULSE while checking */
+    .checking {
+      animation: pulse 1s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.97); opacity: 0.7; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    #historyBtn {
+      background: #475569;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
+    }
+
+    #historyBtn:hover {
+      background: #1e293b;
+    }
+
+    #result {
+      margin-top: 35px;
+      padding: 24px 28px;
+      border-radius: 16px;
+      font-size: 17px;
+      font-weight: 600;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.4s ease;
+      border: 2px solid transparent;
+    }
+
+    /* Result fade + glow */
+    #result.show {
+      opacity: 1;
+      transform: translateY(0);
+      animation: glowPulse 1.6s ease-in-out;
+    }
+
+    @keyframes glowPulse {
+      0%   { box-shadow: 0 0 0px rgba(37,99,235,0); }
+      50%  { box-shadow: 0 0 18px rgba(37,99,235,0.35); }
+      100% { box-shadow: 0 0 0px rgba(37,99,235,0); }
+    }
+
+    #result.safe {
+      background: #F0FDF4;
+      color: #15803D;
+      border-color: #22C55E;
+    }
+
+    #result.danger {
+      background: #FEF2F2;
+      color: #B91C1C;
+      border-color: #EF4444;
+    }
+
+    #result.info {
+      background: #EFF6FF;
+      color: #1E40AF;
+      border-color: #2563EB;
+    }
+
+    /* ===== BADGES ===== */
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      color: white;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-right: 8px;
+    }
+
+    .badge-safe {
+      background: #16a34a;
+    }
+
+    .badge-phish {
+      background: #dc2626;
+    }
+
+    .badge-suspicious {
+      background: #2563eb;
+    }
+
+    /* ===== RESULT EXPLANATIONS ===== */
+    #result .explanation-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    #result .explanation-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    #result.safe .explanation-title {
+      color: #15803D;
+    }
+
+    #result.danger .explanation-title {
+      color: #B91C1C;
+    }
+
+    #result.info .explanation-title {
+      color: #1E40AF;
+    }
+
+    #result .explanation-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    #result .explanation-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      background: rgba(0, 0, 0, 0.02);
+      border-radius: 12px;
+      border-left: 3px solid;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.6;
+      transition: all 0.3s ease;
+    }
+
+    #result.safe .explanation-item {
+      border-left-color: #22C55E;
+      background: rgba(34, 197, 94, 0.05);
+      color: #166534;
+    }
+
+    #result.danger .explanation-item {
+      border-left-color: #EF4444;
+      background: rgba(239, 68, 68, 0.05);
+      color: #991B1B;
+    }
+
+    #result.info .explanation-item {
+      border-left-color: #2563EB;
+      background: rgba(37, 99, 235, 0.05);
+      color: #1E3A8A;
+    }
+
+    #result .explanation-item:hover {
+      background: rgba(0, 0, 0, 0.04);
+      transform: translateX(4px);
+    }
+
+    #result .explanation-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .loading {
+      display: none;
+      margin-top: 25px;
+      text-align: center;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .spinner {
+      border: 3px solid #E5E7EB;
+      border-top: 3px solid #2563EB;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .icon {
+      display: inline-block;
+      margin-right: 10px;
+      font-size: 22px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    }
+
+    /* ===== HISTORY MODAL ===== */
+    #historyModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    #historyModal.active {
+      display: flex;
+    }
+
+    .history-card {
+      background: #ffffff;
+      border-radius: 16px;
+      max-width: 900px;
+      width: 95%;
+      max-height: 80vh;
+      padding: 20px 24px;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transform: translateY(40px);
+      opacity: 0;
+    }
+
+    /* slide-up animation when modal opens */
+    #historyModal.active .history-card {
+      animation: slideUp 0.35s ease-out forwards;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(40px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      gap: 10px;
+    }
+
+    .history-header h2 {
+      margin: 0;
+      font-size: 20px;
+      color: #0f172a;
+    }
+
+    .history-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .history-close {
+      border: none;
+      background: transparent;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+
+    .history-clear {
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background: #dc2626;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 10px rgba(220, 38, 38, 0.4);
+    }
+
+    .history-clear:hover {
+      background: #b91c1c;
+      box-shadow: 0 6px 14px rgba(185, 28, 28, 0.55);
+      transform: translateY(-1px);
+    }
+
+    .history-sort {
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background: #0f172a;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.35);
+    }
+
+    .history-sort:hover {
+      background: #020617;
+      transform: translateY(-1px);
+    }
+
+    .history-table-wrap {
+      overflow: auto;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .history-table th,
+    .history-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    .history-table th {
+      background: #1d4ed8;
+      color: #ffffff;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    /* ===== ML FEATURE SNAPSHOT TABLE ===== */
+    .feature-section-title {
+      margin-top: 18px;
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-section-title .explanation-icon {
+      font-size: 18px;
+    }
+
+    .feature-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .feature-table th,
+    .feature-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+    }
+
+    .feature-table th {
+      font-weight: 600;
+      opacity: 0.85;
+    }
+
+    /* Confidence-based gradient for history rows (optional) */
+    .history-row-phish.conf-weak td   { background: #fee2e2; }
+    .history-row-phish.conf-medium td { background: #fecaca; }
+    .history-row-phish.conf-strong td { background: #fca5a5; }
+
+    .history-row-safe.conf-weak td    { background: #dcfce7; }
+    .history-row-safe.conf-medium td  { background: #bbf7d0; }
+    .history-row-safe.conf-strong td  { background: #86efac; }
+
+    /* zebra stripe */
+    .history-table tr:nth-child(even).data-row td {
+      background: #f9fafb;
+    }
+
+    /* row base */
+    .history-table tr.data-row td {
+      transition: background 0.2s ease;
+    }
+
+    /* phishing rows */
+    .history-row-phish td {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+
+    /* safe rows */
+    .history-row-safe td {
+      background: #ecfdf3;
+      color: #166534;
+    }
+
+    /* neutral/info rows */
+    .history-row-info td {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    /* hover effect on any data row */
+    .history-table tr.data-row:hover td {
+      background: #e5f0ff;
+    }
+
+    /* Pagination bar */
+    .history-pagination {
+      margin-top: 8px;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .history-page-btn {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #cbd5f5;
+      background: #ffffff;
+      cursor: pointer;
+    }
+
+    .history-page-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .history-page-info {
+      opacity: 0.8;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 40px 25px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      .shield-icon {
+        font-size: 48px;
+      }
+
+      .input-wrapper {
+        flex-direction: column;
+      }
+
+      button {
+        width: 100%;
+      }
+
+      .history-actions {
+        gap: 4px;
+      }
+
+      .history-clear {
+        padding: 5px 10px;
+      }
+
+      .history-sort {
+        padding: 5px 10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="shield-icon">🛡️</div>
+      <h1>Phishing Website Detection</h1>
+      <p class="subtitle">Enter a URL to check if it's safe or potentially malicious</p>
+    </div>
+
+    <div class="input-group">
+      <div class="input-wrapper">
+        <input type="text" id="urlInput" placeholder="Enter a website URL (e.g., https://example.com)">
+        <button onclick="checkURL()" id="checkBtn">Check URL</button>
+        <button type="button" onclick="openHistory()" id="historyBtn">View History</button>
+      </div>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+    </div>
+
+    <div id="result"></div>
+
+    <!-- ========== HISTORY MODAL ========== -->
+    <div id="historyModal">
+      <div class="history-card">
+        <div class="history-header">
+          <h2>Prediction History</h2>
+          <div class="history-actions">
+            <button class="history-sort" id="sortBtn" onclick="toggleSortMode()">Newest ↓</button>
+            <button class="history-clear" onclick="clearHistory()">Clear History</button>
+            <button class="history-close" onclick="closeHistory()">✕</button>
+          </div>
+        </div>
+
+        <div class="history-table-wrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>URL</th>
+                <th>Prediction</th>
+                <th>Confidence</th>
+                <th>Explanation</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div id="historyPagination" class="history-pagination"></div>
+      </div>
+    </div>
+    <!-- ========== END HISTORY MODAL ========== -->
+  </div>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:8000";
+    const API_PREDICT = `${API_BASE}/predict`;
+    const API_HISTORY = `${API_BASE}/history`;
+    const API_HISTORY_LOG = `${API_BASE}/history/log`;      // logging frontend phishing
+    const API_HISTORY_CLEAR = `${API_BASE}/history/clear`;  // clear history (DELETE)
+
+    // === History table state ===
+    let allHistoryRows = [];      // full list from backend
+    let sortMode = "desc";        // "desc" = newest first, "asc" = oldest first
+    let currentPage = 1;
+    const PAGE_SIZE = 10;
+
+    function normalizeUrl(u) {
+      if (!u) return u;
+      if (!/^https?:\/\//i.test(u)) return "http://" + u;
+      return u;
+    }
+
+    // helper to log frontend-detected phishing to backend history
+    async function logFrontendPhishing(url, predictionText, explanationList) {
+      try {
+        await fetch(API_HISTORY_LOG, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: url,
+            prediction: predictionText,
+            explanation: explanationList || []
+          })
+        });
+      } catch (e) {
+        console.error("Failed to log frontend phishing:", e);
+      }
+    }
+
+    // Simple helper: describe impact of feature
+    function describeFeatureImpact(name, value) {
+      switch (name) {
+        case "NoHttps":
+          return value === 1 ? "No HTTPS – increases phishing risk" : "HTTPS present";
+        case "NumSensitiveWords":
+          return value > 0 ? "Contains login/secure/account keywords" : "No sensitive keywords detected";
+        case "SubdomainLevel":
+          return value >= 2 ? "Many subdomains – can be used to imitate legit sites" : "Normal subdomain depth";
+        case "NumDash":
+          return value >= 2 ? "Many '-' characters – common in spoofed domains" : "Dash usage looks normal";
+        case "IpAddress":
+          return value === 1 ? "Uses IP address instead of domain – suspicious" : "Uses normal domain name";
+        case "UrlLength":
+          return value > 120 ? "Very long URL – can hide malicious params" : "URL length looks normal";
+        case "NumDots":
+          return value >= 4 ? "Many dots – may try to look like deep path of legit site" : "Dot count looks normal";
+        default:
+          return "Used by the ML model for this prediction";
+      }
+    }
+
+    async function checkURL() {
+      const urlInput = document.getElementById("urlInput");
+      const resultDiv = document.getElementById("result");
+      const loadingDiv = document.getElementById("loading");
+      const checkBtn = document.getElementById("checkBtn");
+      let url = urlInput.value.trim();
+
+      // Reset result area
+      resultDiv.className = "";
+      resultDiv.innerHTML = "";
+
+      // 1) Empty input
+      if (!url) {
+        resultDiv.className = "info show";
+        resultDiv.innerHTML = '<span class="icon">ℹ️</span>Please enter a URL';
+        return;
+      }
+
+      // 2) Require http/https (user must type full URL)
+      if (!/^https?:\/\//i.test(url)) {
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML =
+          '<span class="icon">⚠️</span>Incomplete URL! Please include http:// or https:// (e.g., https://example.com).';
+        return;
+      }
+
+      // 3) Try to parse URL to get hostname
+      let parsed;
+      try {
+        parsed = new URL(url);
+      } catch (e) {
+        // If browser cannot parse, treat as phishing AND log it
+        const explanationList = [
+          "The URL cannot be parsed properly by the browser, which is treated as suspicious in this system."
+        ];
+
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML =
+          '<span class="icon">⚠️</span>' +
+          '<span class="badge badge-phish">Phishing</span>' +
+          `<div class="explanation-section">
+            <div class="explanation-title">
+              <span class="explanation-icon">🔍</span>
+              <span>Analysis Details</span>
+            </div>
+            <ul class="explanation-list">
+              <li class="explanation-item">
+                <span class="explanation-icon">•</span>
+                <span>${explanationList[0]}</span>
+              </li>
+            </ul>
+          </div>`;
+
+        await logFrontendPhishing(url, "Phishing (frontend invalid URL)", explanationList);
+        return;
+      }
+
+      const hostname = parsed.hostname.toLowerCase();
+
+      // ========== FRONTEND HEURISTICS (Option B) ==========
+
+      // 1) Dash + brand keyword in hostname => Phishing
+      const brandWords = ["google", "facebook", "paypal", "bank", "secure", "login", "admin"];
+      const hasDashInHost = hostname.includes("-");
+      const hasBrandInHost = brandWords.some(w => hostname.includes(w));
+
+      if (hasDashInHost && hasBrandInHost) {
+        const explanationList = [
+          'The domain contains both a dash "-" and a brand-like word (e.g. google/admin/bank), which is common in phishing URLs.'
+        ];
+
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML =
+          `<span class="icon">⚠️</span>` +
+          `<span class="badge badge-phish">Phishing</span>` +
+          `<div class="explanation-section">
+            <div class="explanation-title">
+              <span class="explanation-icon">🔍</span>
+              <span>Analysis Details</span>
+            </div>
+            <ul class="explanation-list">
+              <li class="explanation-item">
+                <span class="explanation-icon">•</span>
+                <span>${explanationList[0]}</span>
+              </li>
+            </ul>
+          </div>`;
+
+        await logFrontendPhishing(url, "Phishing (frontend dash+brand rule)", explanationList);
+        return; // don't call API
+      }
+
+      // 2) Incomplete domain like https://goo or https://
+      const parts = hostname.split(".");
+      const leftPart = parts[0] || "";
+      const isIncompleteDomain =
+        !hostname || parts.length < 2 || leftPart.length < 3;
+
+      if (isIncompleteDomain) {
+        const explanationList = [
+          "Domain appears incomplete (e.g., missing proper dot-separated name like example.com)."
+        ];
+
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML =
+          `<span class="icon">⚠️</span>` +
+          `<span class="badge badge-phish">Phishing</span>` +
+          `<div class="explanation-section">
+            <div class="explanation-title">
+              <span class="explanation-icon">🔍</span>
+              <span>Analysis Details</span>
+            </div>
+            <ul class="explanation-list">
+              <li class="explanation-item">
+                <span class="explanation-icon">•</span>
+                <span>${explanationList[0]}</span>
+              </li>
+            </ul>
+          </div>`;
+
+        await logFrontendPhishing(url, "Phishing (frontend incomplete-domain rule)", explanationList);
+        return;
+      }
+
+      // 3) Fake TLD patterns (e.g., .cm, .co.com)
+      const fakeTlds = [".cm", ".co.com"];
+      const hasFakeTld = fakeTlds.some(tld => hostname.endsWith(tld));
+      if (hasFakeTld) {
+        const explanationList = [
+          "Domain ends with a high-risk TLD pattern (e.g., .cm / .co.com) that is often used to mimic legitimate sites."
+        ];
+
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML =
+          `<span class="icon">⚠️</span>` +
+          `<span class="badge badge-phish">Phishing</span>` +
+          `<div class="explanation-section">
+            <div class="explanation-title">
+              <span class="explanation-icon">🔍</span>
+              <span>Analysis Details</span>
+            </div>
+            <ul class="explanation-list">
+              <li class="explanation-item">
+                <span class="explanation-icon">•</span>
+                <span>${explanationList[0]}</span>
+              </li>
+            </ul>
+          </div>`;
+
+        await logFrontendPhishing(url, "Phishing (frontend fake-TLD rule)", explanationList);
+        return;
+      }
+
+      // 4) Too many dots in hostname
+      const dotCount = (hostname.match(/\./g) || []).length;
+      if (dotCount >= 4) {
+        const explanationList = [
+          "Domain contains an unusually high number of dots, which is common in phishing URLs that try to look like sub-pages of trusted sites."
+        ];
+
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML =
+          `<span class="icon">⚠️</span>` +
+          `<span class="badge badge-phish">Phishing</span>` +
+          `<div class="explanation-section">
+            <div class="explanation-title">
+              <span class="explanation-icon">🔍</span>
+              <span>Analysis Details</span>
+            </div>
+            <ul class="explanation-list">
+              <li class="explanation-item">
+                <span class="explanation-icon">•</span>
+                <span>${explanationList[0]}</span>
+              </li>
+            </ul>
+          </div>`;
+
+        await logFrontendPhishing(url, "Phishing (frontend too-many-dots rule)", explanationList);
+        return;
+      }
+
+      // 5) Too many hyphens in hostname
+      const hyphenCount = (hostname.match(/-/g) || []).length;
+      if (hyphenCount >= 4) {
+        const explanationList = [
+          "Domain contains many '-' characters, which is a known pattern in automatically generated phishing URLs."
+        ];
+
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML =
+          `<span class="icon">⚠️</span>` +
+          `<span class="badge badge-phish">Phishing</span>` +
+          `<div class="explanation-section">
+            <div class="explanation-title">
+              <span class="explanation-icon">🔍</span>
+              <span>Analysis Details</span>
+            </div>
+            <ul class="explanation-list">
+              <li class="explanation-item">
+                <span class="explanation-icon">•</span>
+                <span>${explanationList[0]}</span>
+              </li>
+            </ul>
+          </div>`;
+
+        await logFrontendPhishing(url, "Phishing (frontend too-many-hyphens rule)", explanationList);
+        return;
+      }
+
+      // 6) Very long URL
+      if (url.length > 150) {
+        const explanationList = [
+          "URL is unusually long, which can be used to hide malicious parameters and make the link harder to inspect."
+        ];
+
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML =
+          `<span class="icon">⚠️</span>` +
+          `<span class="badge badge-phish">Phishing</span>` +
+          `<div class="explanation-section">
+            <div class="explanation-title">
+              <span class="explanation-icon">🔍</span>
+              <span>Analysis Details</span>
+            </div>
+            <ul class="explanation-list">
+              <li class="explanation-item">
+                <span class="explanation-icon">•</span>
+                <span>${explanationList[0]}</span>
+              </li>
+            </ul>
+          </div>`;
+
+        await logFrontendPhishing(url, "Phishing (frontend long-URL rule)", explanationList);
+        return;
+      }
+
+      // ========== END FRONTEND HEURISTICS ==========
+
+      // If it passes all heuristics, call the backend ML model
+      url = parsed.href; // normalized URL
+
+      loadingDiv.classList.add("active");
+      checkBtn.disabled = true;
+      checkBtn.innerText = "Checking...";
+      checkBtn.classList.add("checking");
+
+      try {
+        const response = await fetch(API_PREDICT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+
+        loadingDiv.classList.remove("active");
+        checkBtn.disabled = false;
+        checkBtn.innerText = "Check URL";
+        checkBtn.classList.remove("checking");
+
+        if (!response.ok) {
+          const text = await response.text();
+          resultDiv.className = "danger show";
+          resultDiv.innerHTML = `<span class="icon">❌</span>Error ${response.status}: ${text}`;
+          return;
+        }
+
+        const data = await response.json();
+        const prediction = (data.prediction || "").toLowerCase();
+        const confText = typeof data.confidence === "number"
+          ? ` (confidence: ${(data.confidence * 100).toFixed(1)}%)`
+          : "";
+
+        let topLine = "";
+        if (prediction.includes("safe") || prediction.includes("legitimate")) {
+          resultDiv.className = "safe show";
+          topLine =
+            `<span class="icon">✅</span>` +
+            `<span class="badge badge-safe">Safe</span>${confText}`;
+        } else if (prediction.includes("phishing") || prediction.includes("malicious") || prediction.includes("unsafe")) {
+          resultDiv.className = "danger show";
+          topLine =
+            `<span class="icon">⚠️</span>` +
+            `<span class="badge badge-phish">Phishing</span>${confText}`;
+        } else {
+          resultDiv.className = "info show";
+          topLine =
+            `<span class="icon">ℹ️</span>` +
+            `<span class="badge badge-suspicious">Suspicious</span>${confText}`;
+        }
+
+        resultDiv.innerHTML = topLine;
+
+        // Existing explanation list from backend
+        if (data.explanation && data.explanation.length > 0) {
+          let explanationHTML = `
+            <div class="explanation-section">
+              <div class="explanation-title">
+                <span class="explanation-icon">🔍</span>
+                <span>Analysis Details</span>
+              </div>
+              <ul class="explanation-list">
+          `;
+          data.explanation.forEach(explanation => {
+            explanationHTML += `
+              <li class="explanation-item">
+                <span class="explanation-icon">•</span>
+                <span>${explanation}</span>
+              </li>
+            `;
+          });
+          explanationHTML += `</ul></div>`;
+          resultDiv.innerHTML += explanationHTML;
+        }
+
+        // ===== ML FEATURE SNAPSHOT (Option C) =====
+        if (data.top_features && data.top_features.length > 0) {
+          let featureHTML = `
+            <div class="explanation-section">
+              <div class="feature-section-title">
+                <span class="explanation-icon">🧠</span>
+                <span>ML Feature Snapshot</span>
+              </div>
+              <table class="feature-table">
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Value</th>
+                    <th>Impact on Risk</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+
+          data.top_features.forEach(f => {
+            const name = f.name || f.feature || "";
+            const value = f.value;
+            const impact = describeFeatureImpact(name, value);
+
+            featureHTML += `
+              <tr>
+                <td>${name}</td>
+                <td>${value}</td>
+                <td>${impact}</td>
+              </tr>
+            `;
+          });
+
+          featureHTML += `</tbody></table></div>`;
+          resultDiv.innerHTML += featureHTML;
+        }
+
+      } catch (error) {
+        loadingDiv.classList.remove("active");
+        checkBtn.disabled = false;
+        checkBtn.innerText = "Check URL";
+        checkBtn.classList.remove("checking");
+        resultDiv.className = "danger show";
+        resultDiv.innerHTML = `<span class="icon">❌</span>Network error: Unable to reach API (${error})`;
+      }
+    }
+
+    function openHistory() {
+      const modal = document.getElementById("historyModal");
+      const tbody = document.getElementById("historyBody");
+
+      modal.classList.add("active");
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5">Loading history...</td>
+        </tr>
+      `;
+
+      loadHistory();
+    }
+
+    function closeHistory() {
+      const modal = document.getElementById("historyModal");
+      modal.classList.remove("active");
+    }
+
+    async function clearHistory() {
+      if (!confirm("Are you sure? This will delete ALL history.")) return;
+
+      try {
+        await fetch(API_HISTORY_CLEAR, { method: "DELETE" });
+        loadHistory();
+      } catch (e) {
+        alert("Failed to clear history in backend.");
+      }
+    }
+
+    /* ===== SORT + PAGINATION HELPERS ===== */
+
+    function applySort() {
+      if (!allHistoryRows.length) return;
+      if (sortMode === "desc") {
+        allHistoryRows.sort((a, b) => (b.id || 0) - (a.id || 0)); // newest first
+      } else {
+        allHistoryRows.sort((a, b) => (a.id || 0) - (b.id || 0)); // oldest first
+      }
+    }
+
+    function updateSortButtonLabel() {
+      const btn = document.getElementById("sortBtn");
+      if (!btn) return;
+      btn.textContent = sortMode === "desc" ? "Newest ↓" : "Oldest ↑";
+    }
+
+    function toggleSortMode() {
+      sortMode = (sortMode === "desc") ? "asc" : "desc";
+      applySort();
+      currentPage = 1;
+      renderHistoryTable();
+      updateSortButtonLabel();
+    }
+
+    function changeHistoryPage(delta) {
+      const totalPages = Math.max(1, Math.ceil(allHistoryRows.length / PAGE_SIZE));
+      let nextPage = currentPage + delta;
+      if (nextPage < 1) nextPage = 1;
+      if (nextPage > totalPages) nextPage = totalPages;
+      if (nextPage !== currentPage) {
+        currentPage = nextPage;
+        renderHistoryTable();
+      }
+    }
+
+    function renderHistoryTable() {
+      const tbody = document.getElementById("historyBody");
+      const pagDiv = document.getElementById("historyPagination");
+
+      if (!tbody || !pagDiv) return;
+
+      if (!allHistoryRows.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5">No history yet.</td>
+          </tr>
+        `;
+        pagDiv.innerHTML = "";
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(allHistoryRows.length / PAGE_SIZE));
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = start + PAGE_SIZE;
+      const pageRows = allHistoryRows.slice(start, end);
+
+      tbody.innerHTML = "";
+
+      pageRows.forEach((item, index) => {
+        const rowNumber = start + index + 1;  // numbering across all pages
+
+        const confNum = (typeof item.confidence === "number") ? item.confidence : null;
+        const conf = confNum != null
+          ? (confNum * 100).toFixed(1) + "%"
+          : "-";
+
+        const predLower = (item.prediction || "").toLowerCase();
+
+        let rowClass = "data-row";
+        if (item.label === 1 || predLower.includes("phish")) {
+          rowClass += " history-row-phish";
+        } else if (predLower.includes("safe") || item.label === 0) {
+          rowClass += " history-row-safe";
+        } else {
+          rowClass += " history-row-info";
+        }
+
+        // Confidence strength (optional gradient)
+        let confClass = "";
+        if (confNum != null) {
+          if (confNum >= 0.85) confClass = "conf-strong";
+          else if (confNum >= 0.6) confClass = "conf-medium";
+          else confClass = "conf-weak";
+        }
+        if (confClass) rowClass += " " + confClass;
+
+        const badgeHtml =
+          (item.label === 1 || predLower.includes("phish"))
+            ? '<span class="badge badge-phish">Phishing</span>'
+            : (predLower.includes("safe") || item.label === 0)
+              ? '<span class="badge badge-safe">Safe</span>'
+              : '<span class="badge badge-suspicious">Suspicious</span>';
+
+        // Explanation handling
+        let explanationsArray = [];
+        if (Array.isArray(item.explanation)) {
+          explanationsArray = item.explanation;
+        } else if (item.explanation) {
+          explanationsArray = [item.explanation];
+        }
+
+        const explanationsHtml = explanationsArray.length
+          ? "• " + explanationsArray.join("<br>• ")
+          : "-";
+
+        tbody.innerHTML += `
+          <tr class="${rowClass}">
+            <td>${rowNumber}</td>
+            <td>${item.url}</td>
+            <td>${badgeHtml}</td>
+            <td>${conf}</td>
+            <td>${explanationsHtml}</td>
+          </tr>
+        `;
+      });
+
+      // Pagination controls
+      const totalPagesText = `${currentPage} / ${totalPages}`;
+      pagDiv.innerHTML = `
+        <button class="history-page-btn" onclick="changeHistoryPage(-1)" ${currentPage === 1 ? "disabled" : ""}>Prev</button>
+        <span class="history-page-info">Page ${totalPagesText}</span>
+        <button class="history-page-btn" onclick="changeHistoryPage(1)" ${currentPage === totalPages ? "disabled" : ""}>Next</button>
+      `;
+    }
+
+    async function loadHistory() {
+      const tbody = document.getElementById("historyBody");
+
+      try {
+        const res = await fetch(API_HISTORY);
+        if (!res.ok) {
+          const text = await res.text();
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="5">Error ${res.status}: ${text}</td>
+            </tr>
+          `;
+          return;
+        }
+
+        const data = await res.json();
+        const rows = data.history || [];
+
+        allHistoryRows = rows.slice();   // copy list
+        applySort();                     // sort according to current sortMode
+        currentPage = 1;                 // reset to first page
+        renderHistoryTable();            // draw table + pagination
+        updateSortButtonLabel();         // sync button text
+      } catch (err) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5">Network error loading history.<br>${err}</td>
+          </tr>
+        `;
+      }
+    }
+
+    document.getElementById("urlInput").addEventListener("keypress", function (event) {
+      if (event.key === "Enter") checkURL();
+    });
+  </script>
+</body>
+</html>
