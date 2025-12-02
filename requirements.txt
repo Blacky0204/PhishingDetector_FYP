@@ -5,5 +5,4 @@ joblib
 scikit-learn
 sqlalchemy
 python-multipart
-pymysql
 orjson

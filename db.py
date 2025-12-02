@@ -1,32 +1,43 @@
-# db.py
+# db.py  (SQLite version – no XAMPP needed)
+
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 import datetime
 
-# Connect to MySQL (XAMPP default configuration)
-DATABASE_URL = "mysql+pymysql://root:@127.0.0.1:3306/phishingdb"
+# ==============================
+# DATABASE SETTINGS (SQLite)
+# ==============================
+# This will create a file called "phishing_history.db" in your project folder.
+DATABASE_URL = "sqlite:///./phishing_history.db"
 
-# Create SQLAlchemy engine and session
-engine = create_engine(DATABASE_URL, echo=True)
+# For SQLite, we need "check_same_thread=False" so SQLAlchemy can reuse the connection
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    echo=False,  # set True if you want to see SQL logs
+)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Define SearchHistory model
+# ==============================
+# TABLE MODEL
+# ==============================
 class SearchHistory(Base):
     __tablename__ = "search_history"
+
     id = Column(Integer, primary_key=True, index=True)
     url = Column(String(500))
-    label = Column(Integer)  # 1 for phishing, 0 for safe
+    label = Column(Integer)          # 1 for phishing, 0 for safe
     prediction = Column(String(50))
     confidence = Column(Float)
-    explanation = Column(Text)  # Store as a JSON string
+    explanation = Column(Text)       # Store as a JSON string
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-# Create tables (if not already created)
+# Create the table if it doesn't exist
 Base.metadata.create_all(bind=engine)
 
-# Create a session
+# Dependency used in main.py
 def get_db():
     db = SessionLocal()
     try:
