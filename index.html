@@ -561,24 +561,31 @@
       .container {
         padding: 40px 25px;
       }
+
       h1 {
         font-size: 28px;
       }
+
       .shield-icon {
         font-size: 48px;
       }
+
       .input-wrapper {
         flex-direction: column;
       }
+
       button {
         width: 100%;
       }
+
       .history-actions {
         gap: 4px;
       }
+
       .history-clear {
         padding: 5px 10px;
       }
+
       .history-sort {
         padding: 5px 10px;
       }
@@ -698,7 +705,6 @@
       }
     }
 
-    // helper for incomplete / invalid URLs (NOT phishing)
     function showIncomplete(message) {
       const resultDiv = document.getElementById("result");
       resultDiv.className = "info show";
@@ -731,21 +737,18 @@
       resultDiv.className = "";
       resultDiv.innerHTML = "";
 
-      // 1) Empty input
       if (!url) {
         resultDiv.className = "info show";
         resultDiv.innerHTML = '<span class="icon">ℹ️</span>Please enter a URL';
         return;
       }
 
-      // 2) Require http/https
       if (!/^https?:\/\//i.test(url)) {
         return showIncomplete(
           "URL seems incomplete. Please include http:// or https:// and a full domain (e.g., https://example.com)."
         );
       }
 
-      // 3) Parse URL
       let parsed;
       try {
         parsed = new URL(url);
@@ -757,41 +760,32 @@
 
       const hostname = parsed.hostname.toLowerCase();
 
-      // ===== INCOMPLETE / INVALID HOSTNAME CHECKS =====
       if (!hostname || hostname.trim().length === 0) {
         return showIncomplete("URL is missing a valid domain name (e.g., example.com).");
       }
 
-      // must contain at least one dot
       if (!hostname.includes(".")) {
         return showIncomplete("Domain does not contain a valid dot-separated name like example.com.");
       }
 
       const hostParts = hostname.split(".");
-      // no empty labels (google., .com, .., etc.)
       if (hostParts.some(p => p.trim().length === 0)) {
         return showIncomplete("Domain contains an empty label (e.g., google., .com, or ..).");
       }
 
-      // TLD must be at least 2 characters
       const tld = hostParts[hostParts.length - 1];
       if (tld.length < 2) {
         return showIncomplete("Top-level domain (e.g., .com) is incomplete or too short.");
       }
 
-      // no leading or trailing hyphen
       if (/^[-]/.test(hostname) || /[-]$/.test(hostname)) {
         return showIncomplete("Domain cannot start or end with a hyphen (-).");
       }
 
-      // no double dots
       if (hostname.includes("..")) {
         return showIncomplete("Domain contains invalid consecutive dots (..).");
       }
 
-      // ========== FRONTEND HEURISTICS (PHISHING RULES) ==========
-
-      // 1) Dash + brand keyword
       const brandWords = ["google", "facebook", "paypal", "bank", "secure", "login", "admin"];
       const hasDashInHost = hostname.includes("-");
       const hasBrandInHost = brandWords.some(w => hostname.includes(w));
@@ -822,7 +816,6 @@
         return;
       }
 
-      // 2) Fake TLD patterns
       const fakeTlds = [".cm", ".co.com"];
       const hasFakeTld = fakeTlds.some(tld => hostname.endsWith(tld));
       if (hasFakeTld) {
@@ -851,7 +844,6 @@
         return;
       }
 
-      // 3) Too many dots
       const dotCount = (hostname.match(/\./g) || []).length;
       if (dotCount >= 4) {
         const explanationList = [
@@ -879,7 +871,6 @@
         return;
       }
 
-      // 4) Too many hyphens
       const hyphenCount = (hostname.match(/-/g) || []).length;
       if (hyphenCount >= 4) {
         const explanationList = [
@@ -907,7 +898,6 @@
         return;
       }
 
-      // 5) Very long URL
       if (url.length > 150) {
         const explanationList = [
           "URL is unusually long, which can be used to hide malicious parameters and make the link harder to inspect."
@@ -933,8 +923,6 @@
         await logFrontendPhishing(url, "Phishing (frontend long-URL rule)", explanationList);
         return;
       }
-
-      // ========== END FRONTEND HEURISTICS ==========
 
       url = parsed.href;
 
@@ -967,6 +955,16 @@
         const confText = typeof data.confidence === "number"
           ? ` (confidence: ${(data.confidence * 100).toFixed(1)}%)`
           : "";
+
+        // 🔸 NEW: if backend says "Incomplete URL", show the same yellow card
+        if (data.label === 2 || prediction.includes("incomplete url")) {
+          const firstExplanation =
+            Array.isArray(data.explanation) && data.explanation.length > 0
+              ? data.explanation[0]
+              : "The domain looks incomplete. Please enter a full website address such as https://example.com.";
+
+          return showIncomplete(firstExplanation);
+        }
 
         let topLine = "";
         if (prediction.includes("safe") || prediction.includes("legitimate")) {

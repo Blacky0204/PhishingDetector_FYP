@@ -127,7 +127,7 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
     explanations: List[str] = []
     top_features: List[dict] = []
 
-    # ----------------- BASIC URL VALIDITY CHECKS -----------------
+    # ----------------- BASIC URL VALIDITY / INCOMPLETE CHECKS -----------------
     # Strip port if any (e.g., example.com:8080)
     host_no_port = host.split(":")[0]
 
@@ -137,25 +137,27 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
     else:
         bare_host = host_no_port
 
-    # Case 1: No host at all => clearly bad / incomplete
-    if not bare_host:
-        result = "Phishing (invalid or missing domain)"
-        explanations.append("URL is missing a valid domain name (e.g., example.com).")
-        label = 1
+    # Split domain parts and main label (to match frontend logic)
+    parts = bare_host.split(".") if bare_host else []
+    left_part = parts[0] if parts else ""
+
+    # INCOMPLETE URL (same idea as in index.html)
+    # - no host at all
+    # - less than 2 dot-separated parts (e.g., "google", "localhost")
+    # - very short left part (1 char)
+    if (not bare_host) or (len(parts) < 2) or (len(left_part) < 2):
+        result = "Incomplete URL (domain appears incomplete)"
+        explanations.append(
+            "The domain looks incomplete. Please enter a full website address such as https://example.com."
+        )
+        label = 2  # 0 = safe, 1 = phishing, 2 = incomplete/info
         conf = None
+
         _save_history(db, url, label, result, conf, explanations)
         return _build_response(url, result, label, conf, explanations, top_features)
 
-    # Case 2: Domain without any dot (e.g., https://goo, https://localhost)
-    if "." not in bare_host:
-        result = "Phishing (incomplete domain name)"
-        explanations.append("Domain does not contain a valid dot-separated name like example.com.")
-        label = 1
-        conf = None
-        _save_history(db, url, label, result, conf, explanations)
-        return _build_response(url, result, label, conf, explanations, top_features)
-
-    # Case 3: Consecutive dashes anywhere in host or path -> very suspicious
+    # ----------------- STRONG PHISHING HEURISTIC -----------------
+    # Consecutive dashes anywhere in host or path -> very suspicious
     if "--" in bare_host or "--" in parsed.path:
         result = "Phishing (suspicious double dash in URL)"
         explanations.append("URL contains consecutive dashes '--', a pattern often seen in phishing links.")
@@ -363,7 +365,7 @@ def clear_history(db: Session = Depends(get_db)):
 def log_frontend_result(item: FrontendLogItem, db: Session = Depends(get_db)):
     """
     Save results that were classified as phishing by frontend rules
-    (dash+brand, incomplete domain, invalid URL, etc.).
+    (dash+brand, fake TLD, long URL, etc.).
     For this project, anything that uses this endpoint is treated as phishing (label=1).
     """
     label = 1  # anything using this endpoint is phishing
