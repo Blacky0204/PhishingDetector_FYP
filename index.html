@@ -136,7 +136,6 @@
       transform: none;
     }
 
-    /* PULSE while checking */
     .checking {
       animation: pulse 1s infinite ease-in-out;
     }
@@ -168,7 +167,6 @@
       border: 2px solid transparent;
     }
 
-    /* Result fade + glow */
     #result.show {
       opacity: 1;
       transform: translateY(0);
@@ -199,7 +197,6 @@
       border-color: #2563EB;
     }
 
-    /* ===== BADGES ===== */
     .badge {
       display: inline-block;
       padding: 4px 12px;
@@ -224,7 +221,6 @@
       background: #2563eb;
     }
 
-    /* ===== RESULT EXPLANATIONS ===== */
     #result .explanation-section {
       margin-top: 20px;
       padding-top: 20px;
@@ -338,7 +334,6 @@
       filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
     }
 
-    /* ===== HISTORY MODAL ===== */
     #historyModal {
       position: fixed;
       inset: 0;
@@ -368,7 +363,6 @@
       opacity: 0;
     }
 
-    /* slide-up animation when modal opens */
     #historyModal.active .history-card {
       animation: slideUp 0.35s ease-out forwards;
     }
@@ -470,7 +464,6 @@
       z-index: 1;
     }
 
-    /* ===== ML FEATURE SNAPSHOT TABLE ===== */
     .feature-section-title {
       margin-top: 18px;
       font-size: 15px;
@@ -503,7 +496,6 @@
       opacity: 0.85;
     }
 
-    /* Confidence-based gradient for history rows (optional) */
     .history-row-phish.conf-weak td   { background: #fee2e2; }
     .history-row-phish.conf-medium td { background: #fecaca; }
     .history-row-phish.conf-strong td { background: #fca5a5; }
@@ -512,40 +504,33 @@
     .history-row-safe.conf-medium td  { background: #bbf7d0; }
     .history-row-safe.conf-strong td  { background: #86efac; }
 
-    /* zebra stripe */
     .history-table tr:nth-child(even).data-row td {
       background: #f9fafb;
     }
 
-    /* row base */
     .history-table tr.data-row td {
       transition: background 0.2s ease;
     }
 
-    /* phishing rows */
     .history-row-phish td {
       background: #fef2f2;
       color: #b91c1c;
     }
 
-    /* safe rows */
     .history-row-safe td {
       background: #ecfdf3;
       color: #166534;
     }
 
-    /* neutral/info rows */
     .history-row-info td {
       background: #eff6ff;
       color: #1d4ed8;
     }
 
-    /* hover effect on any data row */
     .history-table tr.data-row:hover td {
       background: #e5f0ff;
     }
 
-    /* Pagination bar */
     .history-pagination {
       margin-top: 8px;
       display: flex;
@@ -576,31 +561,24 @@
       .container {
         padding: 40px 25px;
       }
-
       h1 {
         font-size: 28px;
       }
-
       .shield-icon {
         font-size: 48px;
       }
-
       .input-wrapper {
         flex-direction: column;
       }
-
       button {
         width: 100%;
       }
-
       .history-actions {
         gap: 4px;
       }
-
       .history-clear {
         padding: 5px 10px;
       }
-
       .history-sort {
         padding: 5px 10px;
       }
@@ -659,7 +637,6 @@
           </table>
         </div>
 
-        <!-- Pagination -->
         <div id="historyPagination" class="history-pagination"></div>
       </div>
     </div>
@@ -670,12 +647,11 @@
     const API_BASE = window.location.origin;
     const API_PREDICT = `${API_BASE}/predict`;
     const API_HISTORY = `${API_BASE}/history`;
-    const API_HISTORY_LOG = `${API_BASE}/history/log`;      // logging frontend phishing
+    const API_HISTORY_LOG = `${API_BASE}/history/log`;
     const API_HISTORY_CLEAR = `${API_BASE}/history/clear`;
 
-    // === History table state ===
-    let allHistoryRows = [];      // full list from backend
-    let sortMode = "desc";        // "desc" = newest first, "asc" = oldest first
+    let allHistoryRows = [];
+    let sortMode = "desc";
     let currentPage = 1;
     const PAGE_SIZE = 10;
 
@@ -685,7 +661,6 @@
       return u;
     }
 
-    // helper to log frontend-detected phishing to backend history
     async function logFrontendPhishing(url, predictionText, explanationList) {
       try {
         await fetch(API_HISTORY_LOG, {
@@ -702,7 +677,6 @@
       }
     }
 
-    // Simple helper: describe impact of feature
     function describeFeatureImpact(name, value) {
       switch (name) {
         case "NoHttps":
@@ -724,6 +698,29 @@
       }
     }
 
+    // helper for incomplete / invalid URLs (NOT phishing)
+    function showIncomplete(message) {
+      const resultDiv = document.getElementById("result");
+      resultDiv.className = "info show";
+      resultDiv.innerHTML = `
+        <span class="icon">⚠️</span>
+        <span class="badge badge-suspicious">Incomplete URL</span>
+        <div class="explanation-section">
+          <div class="explanation-title">
+            <span class="explanation-icon">🔍</span>
+            <span>URL Issue</span>
+          </div>
+          <ul class="explanation-list">
+            <li class="explanation-item">
+              <span class="explanation-icon">•</span>
+              <span>${message}</span>
+            </li>
+          </ul>
+        </div>
+      `;
+      return;
+    }
+
     async function checkURL() {
       const urlInput = document.getElementById("urlInput");
       const resultDiv = document.getElementById("result");
@@ -731,7 +728,6 @@
       const checkBtn = document.getElementById("checkBtn");
       let url = urlInput.value.trim();
 
-      // Reset result area
       resultDiv.className = "";
       resultDiv.innerHTML = "";
 
@@ -742,50 +738,60 @@
         return;
       }
 
-      // 2) Require http/https (user must type full URL)
+      // 2) Require http/https
       if (!/^https?:\/\//i.test(url)) {
-        resultDiv.className = "danger show";
-        resultDiv.innerHTML =
-          '<span class="icon">⚠️</span>Incomplete URL! Please include http:// or https:// (e.g., https://example.com).';
-        return;
+        return showIncomplete(
+          "URL seems incomplete. Please include http:// or https:// and a full domain (e.g., https://example.com)."
+        );
       }
 
-      // 3) Try to parse URL to get hostname
+      // 3) Parse URL
       let parsed;
       try {
         parsed = new URL(url);
       } catch (e) {
-        // If browser cannot parse, treat as phishing AND log it
-        const explanationList = [
-          "The URL cannot be parsed properly by the browser, which is treated as suspicious in this system."
-        ];
-
-        resultDiv.className = "danger show";
-        resultDiv.innerHTML =
-          '<span class="icon">⚠️</span>' +
-          '<span class="badge badge-phish">Phishing</span>' +
-          `<div class="explanation-section">
-            <div class="explanation-title">
-              <span class="explanation-icon">🔍</span>
-              <span>Analysis Details</span>
-            </div>
-            <ul class="explanation-list">
-              <li class="explanation-item">
-                <span class="explanation-icon">•</span>
-                <span>${explanationList[0]}</span>
-              </li>
-            </ul>
-          </div>`;
-
-        await logFrontendPhishing(url, "Phishing (frontend invalid URL)", explanationList);
-        return;
+        return showIncomplete(
+          "The URL cannot be parsed properly. Please check that it is typed correctly (e.g., https://example.com)."
+        );
       }
 
       const hostname = parsed.hostname.toLowerCase();
 
-      // ========== FRONTEND HEURISTICS (Option B) ==========
+      // ===== INCOMPLETE / INVALID HOSTNAME CHECKS =====
+      if (!hostname || hostname.trim().length === 0) {
+        return showIncomplete("URL is missing a valid domain name (e.g., example.com).");
+      }
 
-      // 1) Dash + brand keyword in hostname => Phishing
+      // must contain at least one dot
+      if (!hostname.includes(".")) {
+        return showIncomplete("Domain does not contain a valid dot-separated name like example.com.");
+      }
+
+      const hostParts = hostname.split(".");
+      // no empty labels (google., .com, .., etc.)
+      if (hostParts.some(p => p.trim().length === 0)) {
+        return showIncomplete("Domain contains an empty label (e.g., google., .com, or ..).");
+      }
+
+      // TLD must be at least 2 characters
+      const tld = hostParts[hostParts.length - 1];
+      if (tld.length < 2) {
+        return showIncomplete("Top-level domain (e.g., .com) is incomplete or too short.");
+      }
+
+      // no leading or trailing hyphen
+      if (/^[-]/.test(hostname) || /[-]$/.test(hostname)) {
+        return showIncomplete("Domain cannot start or end with a hyphen (-).");
+      }
+
+      // no double dots
+      if (hostname.includes("..")) {
+        return showIncomplete("Domain contains invalid consecutive dots (..).");
+      }
+
+      // ========== FRONTEND HEURISTICS (PHISHING RULES) ==========
+
+      // 1) Dash + brand keyword
       const brandWords = ["google", "facebook", "paypal", "bank", "secure", "login", "admin"];
       const hasDashInHost = hostname.includes("-");
       const hasBrandInHost = brandWords.some(w => hostname.includes(w));
@@ -813,42 +819,10 @@
           </div>`;
 
         await logFrontendPhishing(url, "Phishing (frontend dash+brand rule)", explanationList);
-        return; // don't call API
-      }
-
-      // 2) Incomplete domain like https://goo or https://
-      const parts = hostname.split(".");
-      const leftPart = parts[0] || "";
-      const isIncompleteDomain =
-        !hostname || parts.length < 2 || leftPart.length < 3;
-
-      if (isIncompleteDomain) {
-        const explanationList = [
-          "Domain appears incomplete (e.g., missing proper dot-separated name like example.com)."
-        ];
-
-        resultDiv.className = "danger show";
-        resultDiv.innerHTML =
-          `<span class="icon">⚠️</span>` +
-          `<span class="badge badge-phish">Phishing</span>` +
-          `<div class="explanation-section">
-            <div class="explanation-title">
-              <span class="explanation-icon">🔍</span>
-              <span>Analysis Details</span>
-            </div>
-            <ul class="explanation-list">
-              <li class="explanation-item">
-                <span class="explanation-icon">•</span>
-                <span>${explanationList[0]}</span>
-              </li>
-            </ul>
-          </div>`;
-
-        await logFrontendPhishing(url, "Phishing (frontend incomplete-domain rule)", explanationList);
         return;
       }
 
-      // 3) Fake TLD patterns (e.g., .cm, .co.com)
+      // 2) Fake TLD patterns
       const fakeTlds = [".cm", ".co.com"];
       const hasFakeTld = fakeTlds.some(tld => hostname.endsWith(tld));
       if (hasFakeTld) {
@@ -877,7 +851,7 @@
         return;
       }
 
-      // 4) Too many dots in hostname
+      // 3) Too many dots
       const dotCount = (hostname.match(/\./g) || []).length;
       if (dotCount >= 4) {
         const explanationList = [
@@ -905,7 +879,7 @@
         return;
       }
 
-      // 5) Too many hyphens in hostname
+      // 4) Too many hyphens
       const hyphenCount = (hostname.match(/-/g) || []).length;
       if (hyphenCount >= 4) {
         const explanationList = [
@@ -933,7 +907,7 @@
         return;
       }
 
-      // 6) Very long URL
+      // 5) Very long URL
       if (url.length > 150) {
         const explanationList = [
           "URL is unusually long, which can be used to hide malicious parameters and make the link harder to inspect."
@@ -962,8 +936,7 @@
 
       // ========== END FRONTEND HEURISTICS ==========
 
-      // If it passes all heuristics, call the backend ML model
-      url = parsed.href; // normalized URL
+      url = parsed.href;
 
       loadingDiv.classList.add("active");
       checkBtn.disabled = true;
@@ -1015,7 +988,6 @@
 
         resultDiv.innerHTML = topLine;
 
-        // Existing explanation list from backend
         if (data.explanation && data.explanation.length > 0) {
           let explanationHTML = `
             <div class="explanation-section">
@@ -1037,7 +1009,6 @@
           resultDiv.innerHTML += explanationHTML;
         }
 
-        // ===== ML FEATURE SNAPSHOT (Option C) =====
         if (data.top_features && data.top_features.length > 0) {
           let featureHTML = `
             <div class="explanation-section">
@@ -1114,14 +1085,12 @@
       }
     }
 
-    /* ===== SORT + PAGINATION HELPERS ===== */
-
     function applySort() {
       if (!allHistoryRows.length) return;
       if (sortMode === "desc") {
-        allHistoryRows.sort((a, b) => (b.id || 0) - (a.id || 0)); // newest first
+        allHistoryRows.sort((a, b) => (b.id || 0) - (a.id || 0));
       } else {
-        allHistoryRows.sort((a, b) => (a.id || 0) - (b.id || 0)); // oldest first
+        allHistoryRows.sort((a, b) => (a.id || 0) - (b.id || 0));
       }
     }
 
@@ -1176,7 +1145,7 @@
       tbody.innerHTML = "";
 
       pageRows.forEach((item, index) => {
-        const rowNumber = start + index + 1;  // numbering across all pages
+        const rowNumber = start + index + 1;
 
         const confNum = (typeof item.confidence === "number") ? item.confidence : null;
         const conf = confNum != null
@@ -1194,7 +1163,6 @@
           rowClass += " history-row-info";
         }
 
-        // Confidence strength (optional gradient)
         let confClass = "";
         if (confNum != null) {
           if (confNum >= 0.85) confClass = "conf-strong";
@@ -1210,7 +1178,6 @@
               ? '<span class="badge badge-safe">Safe</span>'
               : '<span class="badge badge-suspicious">Suspicious</span>';
 
-        // Explanation handling
         let explanationsArray = [];
         if (Array.isArray(item.explanation)) {
           explanationsArray = item.explanation;
@@ -1233,7 +1200,6 @@
         `;
       });
 
-      // Pagination controls
       const totalPagesText = `${currentPage} / ${totalPages}`;
       pagDiv.innerHTML = `
         <button class="history-page-btn" onclick="changeHistoryPage(-1)" ${currentPage === 1 ? "disabled" : ""}>Prev</button>
@@ -1260,11 +1226,11 @@
         const data = await res.json();
         const rows = data.history || [];
 
-        allHistoryRows = rows.slice();   // copy list
-        applySort();                     // sort according to current sortMode
-        currentPage = 1;                 // reset to first page
-        renderHistoryTable();            // draw table + pagination
-        updateSortButtonLabel();         // sync button text
+        allHistoryRows = rows.slice();
+        applySort();
+        currentPage = 1;
+        renderHistoryTable();
+        updateSortButtonLabel();
       } catch (err) {
         tbody.innerHTML = `
           <tr>
