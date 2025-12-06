@@ -158,12 +158,12 @@ def login(user_data: UserLogin):
 @app.get("/auth/me", response_model=UserResponse)
 def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current user info"""
-    return {
-        "id": current_user["id"],
-        "username": current_user["username"],
-        "email": current_user["email"],
-        "created_at": current_user["created_at"]
-    }
+    return UserResponse(
+        id=current_user["id"],
+        username=current_user["username"],
+        email=current_user["email"],
+        created_at=current_user["created_at"]
+    )
 
 # -------------------------------------------------
 # PUBLIC ENDPOINTS (No auth required)
