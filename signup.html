@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - Phishing Detector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(37, 99, 235, 0.2);
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 500px;
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .shield-icon {
+            font-size: 64px;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        h1 {
+            color: #0F172A;
+            font-size: 28px;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #64748B;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #0F172A;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+        
+        input:focus {
+            border-color: #2563EB;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+        
+        .error-message {
+            color: #dc2626;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #2563EB 0%, #06B6D4 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #475569;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
+        }
+        
+        .btn-secondary:hover {
+            background: #1e293b;
+        }
+        
+        .divider {
+            text-align: center;
+            margin: 25px 0;
+            color: #64748B;
+            position: relative;
+        }
+        
+        .divider::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background: #e0e0e0;
+        }
+        
+        .divider::after {
+            content: "";
+            position: absolute;
+            right: 0;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background: #e0e0e0;
+        }
+        
+        .login-link {
+            text-align: center;
+            margin-top: 25px;
+            color: #64748B;
+        }
+        
+        .login-link a {
+            color: #2563EB;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .login-link a:hover {
+            text-decoration: underline;
+        }
+        
+        .password-strength {
+            margin-top: 8px;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .strength-bar {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+        
+        .strength-text {
+            font-size: 12px;
+            margin-top: 5px;
+            color: #64748B;
+        }
+        
+        .success-message {
+            color: #16a34a;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .success-message.show {
+            display: block;
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 40px 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <div class="shield-icon">🛡️</div>
+            <h1>Create Account</h1>
+            <p class="subtitle">Join Phishing Detector to secure your browsing</p>
+        </div>
+        
+        <form id="signupForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" placeholder="Choose a username (min 3 chars)" required>
+                <div class="error-message" id="usernameError"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" placeholder="your.email@example.com" required>
+                <div class="error-message" id="emailError"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Create a strong password (min 6 chars)" required>
+                <div class="password-strength">
+                    <div class="strength-bar" id="strengthBar"></div>
+                </div>
+                <div class="strength-text" id="strengthText">Password strength: None</div>
+                <div class="error-message" id="passwordError"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Re-enter your password" required>
+                <div class="error-message" id="confirmError"></div>
+            </div>
+            
+            <div class="success-message" id="successMessage"></div>
+            
+            <button type="submit" class="btn" id="signupBtn">Create Account</button>
+            
+            <div class="divider">or</div>
+            
+            <button type="button" class="btn btn-secondary" onclick="window.location.href='login.html'">
+                Already have an account? Sign In
+            </button>
+        </form>
+        
+        <div class="login-link">
+            By signing up, you agree to our <a href="#" onclick="alert('Terms of Service coming soon!')">Terms of Service</a> and <a href="#" onclick="alert('Privacy Policy coming soon!')">Privacy Policy</a>
+        </div>
+    </div>
+
+    <script>
+        // Get the current base URL
+        const API_BASE = window.location.origin;
+        const API_SIGNUP = `${API_BASE}/auth/register`;
+        
+        // Check if already logged in
+        if (localStorage.getItem('auth_token')) {
+            window.location.href = 'dashboard.html';
+        }
+        
+        // Password strength checker
+        document.getElementById('password').addEventListener('input', function(e) {
+            const password = e.target.value;
+            const strengthBar = document.getElementById('strengthBar');
+            const strengthText = document.getElementById('strengthText');
+            
+            let strength = 0;
+            let color = '#dc2626';
+            let text = 'Very Weak';
+            
+            // Length check
+            if (password.length >= 6) strength += 25;
+            if (password.length >= 8) strength += 15;
+            if (password.length >= 12) strength += 10;
+            
+            // Complexity checks
+            if (/[A-Z]/.test(password)) strength += 15;
+            if (/[a-z]/.test(password)) strength += 15;
+            if (/[0-9]/.test(password)) strength += 15;
+            if (/[^A-Za-z0-9]/.test(password)) strength += 20;
+            
+            // Cap at 100
+            strength = Math.min(strength, 100);
+            
+            // Set color and text based on strength
+            if (strength >= 80) {
+                color = '#16a34a';
+                text = 'Strong';
+            } else if (strength >= 60) {
+                color = '#2563eb';
+                text = 'Good';
+            } else if (strength >= 40) {
+                color = '#f59e0b';
+                text = 'Fair';
+            } else if (strength >= 20) {
+                color = '#dc2626';
+                text = 'Weak';
+            } else {
+                color = '#dc2626';
+                text = 'Very Weak';
+            }
+            
+            strengthBar.style.width = strength + '%';
+            strengthBar.style.background = color;
+            strengthText.textContent = `Password strength: ${text}`;
+            strengthText.style.color = color;
+        });
+        
+        // Real-time password match check
+        document.getElementById('confirmPassword').addEventListener('input', function() {
+            const password = document.getElementById('password').value;
+            const confirmPassword = this.value;
+            const confirmError = document.getElementById('confirmError');
+            
+            if (password && confirmPassword && password !== confirmPassword) {
+                confirmError.textContent = 'Passwords do not match';
+                confirmError.classList.add('show');
+            } else {
+                confirmError.classList.remove('show');
+            }
+        });
+        
+        // Real-time username validation
+        document.getElementById('username').addEventListener('input', function() {
+            const username = this.value.trim();
+            const usernameError = document.getElementById('usernameError');
+            
+            if (username.length > 0 && username.length < 3) {
+                usernameError.textContent = 'Username must be at least 3 characters';
+                usernameError.classList.add('show');
+            } else {
+                usernameError.classList.remove('show');
+            }
+        });
+        
+        // Real-time email validation
+        document.getElementById('email').addEventListener('input', function() {
+            const email = this.value.trim();
+            const emailError = document.getElementById('emailError');
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            
+            if (email && !emailRegex.test(email)) {
+                emailError.textContent = 'Please enter a valid email address';
+                emailError.classList.add('show');
+            } else {
+                emailError.classList.remove('show');
+            }
+        });
+        
+        // Form validation and submission
+        document.getElementById('signupForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const successMessage = document.getElementById('successMessage');
+            
+            // Reset messages
+            document.querySelectorAll('.error-message').forEach(el => {
+                el.classList.remove('show');
+                el.textContent = '';
+            });
+            successMessage.classList.remove('show');
+            
+            let isValid = true;
+            
+            // Username validation
+            if (username.length < 3) {
+                document.getElementById('usernameError').textContent = 'Username must be at least 3 characters';
+                document.getElementById('usernameError').classList.add('show');
+                isValid = false;
+            }
+            
+            // Email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                document.getElementById('emailError').textContent = 'Please enter a valid email address';
+                document.getElementById('emailError').classList.add('show');
+                isValid = false;
+            }
+            
+            // Password validation
+            if (password.length < 6) {
+                document.getElementById('passwordError').textContent = 'Password must be at least 6 characters';
+                document.getElementById('passwordError').classList.add('show');
+                isValid = false;
+            }
+            
+            // Confirm password
+            if (password !== confirmPassword) {
+                document.getElementById('confirmError').textContent = 'Passwords do not match';
+                document.getElementById('confirmError').classList.add('show');
+                isValid = false;
+            }
+            
+            if (!isValid) return;
+            
+            // Disable button and show loading
+            const signupBtn = document.getElementById('signupBtn');
+            signupBtn.disabled = true;
+            signupBtn.textContent = 'Creating Account...';
+            
+            try {
+                const response = await fetch(API_SIGNUP, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        email: email,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Success - show success message and auto-login
+                    signupBtn.textContent = 'Success! Auto-logging in...';
+                    signupBtn.style.background = 'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)';
+                    
+                    // Try to auto-login after successful signup
+                    try {
+                        const loginResponse = await fetch(`${API_BASE}/auth/login`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                username: username,
+                                password: password
+                            })
+                        });
+                        
+                        if (loginResponse.ok) {
+                            const loginData = await loginResponse.json();
+                            
+                            // Store token and user info
+                            localStorage.setItem('auth_token', loginData.access_token);
+                            localStorage.setItem('username', loginData.username || username);
+                            
+                            if (loginData.user_id) {
+                                localStorage.setItem('user_id', loginData.user_id);
+                            }
+                            
+                            // Redirect to dashboard after short delay
+                            setTimeout(() => {
+                                window.location.href = 'dashboard.html';
+                            }, 1500);
+                            
+                        } else {
+                            // If auto-login fails, redirect to login page
+                            successMessage.textContent = 'Account created! Redirecting to login...';
+                            successMessage.classList.add('show');
+                            
+                            setTimeout(() => {
+                                window.location.href = 'login.html';
+                            }, 2000);
+                        }
+                        
+                    } catch (loginError) {
+                        // If auto-login fails, redirect to login page
+                        successMessage.textContent = 'Account created! Redirecting to login...';
+                        successMessage.classList.add('show');
+                        
+                        setTimeout(() => {
+                            window.location.href = 'login.html';
+                        }, 2000);
+                    }
+                    
+                } else {
+                    // Show error from server
+                    let errorMsg = data.detail || 'Registration failed';
+                    
+                    // More specific error messages
+                    if (response.status === 400) {
+                        if (errorMsg.includes('Username') || errorMsg.includes('username')) {
+                            document.getElementById('usernameError').textContent = errorMsg;
+                            document.getElementById('usernameError').classList.add('show');
+                        } else if (errorMsg.includes('Email') || errorMsg.includes('email')) {
+                            document.getElementById('emailError').textContent = errorMsg;
+                            document.getElementById('emailError').classList.add('show');
+                        } else if (errorMsg.includes('Password') || errorMsg.includes('password')) {
+                            document.getElementById('passwordError').textContent = errorMsg;
+                            document.getElementById('passwordError').classList.add('show');
+                        } else {
+                            document.getElementById('usernameError').textContent = errorMsg;
+                            document.getElementById('usernameError').classList.add('show');
+                        }
+                    } else if (response.status === 500) {
+                        errorMsg = 'Server error. Please try again later.';
+                        document.getElementById('usernameError').textContent = errorMsg;
+                        document.getElementById('usernameError').classList.add('show');
+                    }
+                    
+                    // Shake animation for error
+                    document.getElementById('signupForm').style.animation = 'shake 0.5s ease-in-out';
+                    setTimeout(() => {
+                        document.getElementById('signupForm').style.animation = '';
+                    }, 500);
+                }
+            } catch (error) {
+                console.error('Signup error:', error);
+                
+                // Check if it's a network error
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    document.getElementById('usernameError').textContent = 'Cannot connect to server. Please check your connection.';
+                } else {
+                    document.getElementById('usernameError').textContent = 'An error occurred. Please try again.';
+                }
+                document.getElementById('usernameError').classList.add('show');
+            } finally {
+                // Only reset button if not successful
+                if (!localStorage.getItem('auth_token')) {
+                    signupBtn.disabled = false;
+                    signupBtn.textContent = 'Create Account';
+                    signupBtn.style.background = 'linear-gradient(135deg, #2563EB 0%, #06B6D4 100%)';
+                }
+            }
+        });
+        
+        // Add shake animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                20%, 40%, 60%, 80% { transform: translateX(5px); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Allow Enter key to submit form
+        document.getElementById('confirmPassword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('signupForm').dispatchEvent(new Event('submit'));
+            }
+        });
+        
+        // Auto-focus on username field
+        document.getElementById('username').focus();
+    </script>
+</body>
+</html>

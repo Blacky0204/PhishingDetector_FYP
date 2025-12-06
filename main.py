@@ -1,11 +1,11 @@
-# main.py
-from fastapi import FastAPI, HTTPException, Depends
+# main.py - UPDATED FOR SQLITE
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import BaseModel, validator
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
+from fastapi.security import OAuth2PasswordBearer
+from datetime import timedelta
 from urllib.parse import urlparse
-from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import pandas as pd
 import joblib
 import json
@@ -13,17 +13,37 @@ import os
 import uvicorn
 
 from feature_extraction import extract_features
-from db import get_db, SearchHistory
+from db import (
+    init_database,  # Initialize database
+    add_search_history,
+    get_user_search_history,
+    create_user,
+    get_user_by_username,
+    get_user_by_email,
+    get_user_by_id
+)
+from auth import (
+    get_current_user,
+    create_access_token,
+    authenticate_user,
+    get_password_hash,
+    verify_password,
+    validate_email
+)
+from schemas import UserCreate, UserLogin, Token, UserResponse, URLItem, FrontendLogItem
 
-# -------------------------------------------------
-# FastAPI APP
-# -------------------------------------------------
-app = FastAPI(title="Phishing Detection API", version="1.0")
+app = FastAPI(title="Phishing Detection API", version="3.0")
 
-# CORS (frontend will call this API from browser)
+# Initialize database on startup
+@app.on_event("startup")
+def startup_event():
+    init_database()
+    print("[INFO] Database initialized")
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # later you can restrict if needed
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,7 +57,7 @@ MODEL_COLUMNS: List[str] | None = None
 load_err = ""
 
 try:
-    pkg = joblib.load("phishing_model.pkl")  # make sure this file name matches your .pkl
+    pkg = joblib.load("phishing_model.pkl")
     model = pkg["model"]
     MODEL_COLUMNS = list(pkg["columns"])
     print(f"[INFO] Loaded model with {len(MODEL_COLUMNS)} columns.")
@@ -47,76 +67,166 @@ except Exception as e:
 
 
 def to_model_frame(features_dict: dict) -> pd.DataFrame:
-    """
-    Align features from extract_features() with the columns
-    that the model was trained on.
-    Any extra features are dropped; any missing ones are filled with 0.
-    """
     if MODEL_COLUMNS is None:
         raise RuntimeError("Model columns not loaded.")
-
+    
     df = pd.DataFrame([features_dict])
     for c in MODEL_COLUMNS:
         if c not in df.columns:
             df[c] = 0
     return df[MODEL_COLUMNS]
 
+# -------------------------------------------------
+# AUTHENTICATION ENDPOINTS (UPDATED FOR SQLITE)
+# -------------------------------------------------
+@app.post("/auth/register", response_model=UserResponse)
+def register(user: UserCreate):
+    """Register a new user"""
+    # Validation
+    if not validate_email(user.email):
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid email format"
+        )
+    
+    if len(user.password) < 6:
+        raise HTTPException(
+            status_code=400, 
+            detail="Password must be at least 6 characters"
+        )
+    
+    if len(user.username) < 3:
+        raise HTTPException(
+            status_code=400, 
+            detail="Username must be at least 3 characters"
+        )
+    
+    # Check if username exists
+    db_user = get_user_by_username(user.username)
+    if db_user:
+        raise HTTPException(
+            status_code=400, 
+            detail="Username already registered"
+        )
+    
+    # Check if email exists
+    db_user = get_user_by_email(user.email)
+    if db_user:
+        raise HTTPException(
+            status_code=400, 
+            detail="Email already registered"
+        )
+    
+    # Create new user
+    hashed_password = get_password_hash(user.password)
+    user_id = create_user(user.username, user.email, hashed_password)
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to create user"
+        )
+    
+    # Get created user
+    db_user = get_user_by_id(user_id)
+    if not db_user:
+        raise HTTPException(
+            status_code=500, 
+            detail="User created but not found"
+        )
+    
+    return {
+        "id": db_user["id"],
+        "username": db_user["username"],
+        "email": db_user["email"],
+        "created_at": db_user["created_at"]
+    }
+
+@app.post("/auth/login", response_model=Token)
+def login(user_data: UserLogin):
+    """Login user"""
+    user = authenticate_user(user_data.username, user_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username/email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_access_token(
+        data={"sub": user["username"]},
+        expires_delta=timedelta(minutes=60 * 24)  # 24 hours
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "username": user["username"],
+        "user_id": user["id"]
+    }
+
+@app.get("/auth/me", response_model=UserResponse)
+def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current user info"""
+    return {
+        "id": current_user["id"],
+        "username": current_user["username"],
+        "email": current_user["email"],
+        "created_at": current_user["created_at"]
+    }
 
 # -------------------------------------------------
-# Pydantic models
+# PUBLIC ENDPOINTS (No auth required)
 # -------------------------------------------------
-class URLItem(BaseModel):
-    url: str
+@app.get("/")
+def home():
+    """Redirect to login page"""
+    return RedirectResponse(url="/login.html")
 
-    @validator("url")
-    def ensure_scheme(cls, v: str) -> str:
-        """
-        Ensure URL has http:// or https:// so urlparse() works properly.
-        Frontend already enforces, but we double-check here.
-        """
-        v = v.strip()
-        if not urlparse(v).scheme:
-            v = "http://" + v
-        return v
-
-
-class FrontendLogItem(BaseModel):
-    url: str
-    prediction: str
-    explanation: List[str] = []
-
-
-# -------------------------------------------------
-# BASIC ENDPOINTS
-# -------------------------------------------------
 @app.get("/health")
 def health():
     if model is None:
         raise HTTPException(status_code=503, detail=f"Model not loaded: {load_err}")
-    return {"status": "ok"}
+    return {"status": "ok", "authenticated": False}
 
+# Serve static HTML files
+@app.get("/login.html", response_class=HTMLResponse)
+def serve_login():
+    if not os.path.exists("login.html"):
+        return HTMLResponse("<h2>Login page not found</h2>", status_code=404)
+    return FileResponse("login.html")
 
-# 👉 Serve your frontend here
-@app.get("/", response_class=HTMLResponse)
-def home():
-    """
-    Serve the main HTML UI.
-    Make sure index.html is in the same folder as main.py.
-    """
-    index_path = os.path.join(os.path.dirname(__file__), "index.html")
-    if not os.path.exists(index_path):
-        return HTMLResponse(
-            content="<h2>index.html not found next to main.py</h2>",
-            status_code=500,
-        )
-    return FileResponse(index_path)
+@app.get("/signup.html", response_class=HTMLResponse)
+def serve_signup():
+    if not os.path.exists("signup.html"):
+        return HTMLResponse("<h2>Signup page not found</h2>", status_code=404)
+    return FileResponse("signup.html")
 
+@app.get("/dashboard.html", response_class=HTMLResponse)
+def serve_dashboard():
+    if not os.path.exists("dashboard.html"):
+        return HTMLResponse("<h2>Dashboard not found</h2>", status_code=404)
+    return FileResponse("dashboard.html")
 
 # -------------------------------------------------
-# PREDICT ENDPOINT (ML + heuristics, always logs to DB)
+# PROTECTED ENDPOINTS (Require auth)
 # -------------------------------------------------
+@app.get("/api/health")
+def protected_health(current_user: dict = Depends(get_current_user)):
+    if model is None:
+        raise HTTPException(status_code=503, detail=f"Model not loaded: {load_err}")
+    return {
+        "status": "ok", 
+        "authenticated": True, 
+        "username": current_user["username"],
+        "user_id": current_user["id"]
+    }
+
 @app.post("/predict")
-def predict_url(item: URLItem, db: Session = Depends(get_db)):
+def predict_url(
+    item: URLItem, 
+    current_user: dict = Depends(get_current_user)
+):
     if model is None:
         raise HTTPException(status_code=503, detail=f"Model not loaded: {load_err}")
 
@@ -128,42 +238,35 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
     top_features: List[dict] = []
 
     # ----------------- BASIC URL VALIDITY / INCOMPLETE CHECKS -----------------
-    # Strip port if any (e.g., example.com:8080)
     host_no_port = host.split(":")[0]
 
-    # Remove leading "www."
     if host_no_port.startswith("www."):
         bare_host = host_no_port[4:]
     else:
         bare_host = host_no_port
 
-    # Split domain parts and main label (to match frontend logic)
     parts = bare_host.split(".") if bare_host else []
     left_part = parts[0] if parts else ""
 
-    # INCOMPLETE URL (same idea as in index.html)
-    # - no host at all
-    # - less than 2 dot-separated parts (e.g., "google", "localhost")
-    # - very short left part (1 char)
+    # INCOMPLETE URL
     if (not bare_host) or (len(parts) < 2) or (len(left_part) < 2):
         result = "Incomplete URL (domain appears incomplete)"
         explanations.append(
             "The domain looks incomplete. Please enter a full website address such as https://example.com."
         )
-        label = 2  # 0 = safe, 1 = phishing, 2 = incomplete/info
+        label = 2
         conf = None
 
-        _save_history(db, url, label, result, conf, explanations)
+        _save_history(url, label, result, conf, explanations, current_user["id"])
         return _build_response(url, result, label, conf, explanations, top_features)
 
     # ----------------- STRONG PHISHING HEURISTIC -----------------
-    # Consecutive dashes anywhere in host or path -> very suspicious
     if "--" in bare_host or "--" in parsed.path:
         result = "Phishing (suspicious double dash in URL)"
         explanations.append("URL contains consecutive dashes '--', a pattern often seen in phishing links.")
         label = 1
         conf = None
-        _save_history(db, url, label, result, conf, explanations)
+        _save_history(url, label, result, conf, explanations, current_user["id"])
         return _build_response(url, result, label, conf, explanations, top_features)
 
     # ----------------- HEURISTIC "SUSPICIOUS BUT NOT 100% BAD" -----------------
@@ -187,7 +290,7 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
     # ----------------- MACHINE LEARNING PREDICTION -----------------
     feats = extract_features(url)
     df = to_model_frame(feats)
-    pred = int(model.predict(df)[0])      # 0 = safe, 1 = phishing
+    pred = int(model.predict(df)[0])
     conf = None
 
     if hasattr(model, "predict_proba"):
@@ -204,7 +307,6 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
 
     # ----------------- FEATURE-BASED EXPLANATIONS -----------------
     try:
-        # These names align with your frontend's describeFeatureImpact()
         if "NumSensitiveWords" in df.columns and df["NumSensitiveWords"].iloc[0] > 0:
             explanations.append(
                 "Contains words like login/secure/account, which are common in phishing pages."
@@ -218,7 +320,6 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
         if "IpAddress" in df.columns and df["IpAddress"].iloc[0] == 1:
             explanations.append("Uses an IP address instead of a normal domain name, which is suspicious.")
     except Exception:
-        # If any column name mismatch happens, just skip explanation section.
         pass
 
     if suspicious and pred == 0:
@@ -230,7 +331,7 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
     if not explanations:
         explanations.append("URL structure appears normal based on basic checks.")
 
-    # ----------------- ML TOP FEATURE SNAPSHOT (for Option C table) -----------------
+    # ----------------- ML TOP FEATURE SNAPSHOT -----------------
     try:
         candidate_features = [
             "NoHttps",
@@ -251,36 +352,170 @@ def predict_url(item: URLItem, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"[WARN] Failed building top_features: {e}")
 
-    # save in DB with the *model* label (pred)
-    _save_history(db, url, pred, result, conf, explanations)
+    # save in DB with user_id
+    _save_history(url, pred, result, conf, explanations, current_user["id"])
     return _build_response(url, result, pred, conf, explanations, top_features)
 
+@app.get("/history")
+def get_history(
+    limit: int = 50, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Get user's search history"""
+    rows = get_user_search_history(current_user["id"], limit)
+    
+    history_list = []
+    for r in rows:
+        try:
+            expl = json.loads(r["explanation"]) if r["explanation"] else []
+        except Exception:
+            expl = [str(r["explanation"])]
+
+        history_list.append(
+            {
+                "id": r["id"],
+                "url": r["url"],
+                "label": r["label"],
+                "prediction": r["prediction"],
+                "confidence": r["confidence"],
+                "explanation": expl,
+                "created_at": r["created_at"],
+                "user_id": r["user_id"]
+            }
+        )
+
+    return {"history": history_list}
+
+@app.delete("/history/clear")
+def clear_history(current_user: dict = Depends(get_current_user)):
+    """Clear user's search history"""
+    # Note: We need to add this function to db.py
+    # For now, we'll use a workaround
+    from db import SQLiteDB
+    
+    try:
+        db = SQLiteDB()
+        db.execute_query(
+            "DELETE FROM search_history WHERE user_id = ?", 
+            (current_user["id"],)
+        )
+        db.close()
+        print(f"[INFO] History cleared for user: {current_user['username']}")
+        return {"status": "ok", "message": "history cleared"}
+    except Exception as e:
+        print(f"[ERROR] Failed to clear history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear history")
+
+@app.post("/history/log")
+def log_frontend_result(
+    item: FrontendLogItem, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Log a frontend phishing result"""
+    try:
+        record_id = add_search_history(
+            url=item.url,
+            user_id=current_user["id"],
+            prediction=item.prediction,
+            confidence=1.0,
+            explanation=json.dumps(item.explanation or [])
+        )
+        
+        if record_id:
+            print(f"[INFO] Logged frontend phishing for user {current_user['username']}: {item.url}")
+            return {"status": "ok", "message": "saved", "record_id": record_id}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save to database")
+    except Exception as e:
+        print(f"[ERROR] Failed to save frontend history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save frontend history")
 
 # -------------------------------------------------
-# HELPERS FOR HISTORY + RESPONSE
+# NEW: GUEST/ANONYMOUS PREDICTION ENDPOINT
+# -------------------------------------------------
+@app.post("/predict/guest")
+def predict_url_guest(item: URLItem):
+    """Predict URL without authentication (guest mode)"""
+    if model is None:
+        raise HTTPException(status_code=503, detail=f"Model not loaded: {load_err}")
+
+    url = item.url.strip()
+    parsed = urlparse(url)
+    host = (parsed.netloc or "").lower()
+
+    explanations: List[str] = []
+    top_features: List[dict] = []
+
+    # Basic checks (same as authenticated version)
+    host_no_port = host.split(":")[0]
+    if host_no_port.startswith("www."):
+        bare_host = host_no_port[4:]
+    else:
+        bare_host = host_no_port
+
+    parts = bare_host.split(".") if bare_host else []
+    left_part = parts[0] if parts else ""
+
+    # INCOMPLETE URL
+    if (not bare_host) or (len(parts) < 2) or (len(left_part) < 2):
+        result = "Incomplete URL (domain appears incomplete)"
+        explanations.append(
+            "The domain looks incomplete. Please enter a full website address such as https://example.com."
+        )
+        label = 2
+        conf = None
+        return _build_response(url, result, label, conf, explanations, top_features)
+
+    # Phishing heuristic
+    if "--" in bare_host or "--" in parsed.path:
+        result = "Phishing (suspicious double dash in URL)"
+        explanations.append("URL contains consecutive dashes '--', a pattern often seen in phishing links.")
+        label = 1
+        conf = None
+        return _build_response(url, result, label, conf, explanations, top_features)
+
+    # ML Prediction
+    feats = extract_features(url)
+    df = to_model_frame(feats)
+    pred = int(model.predict(df)[0])
+    conf = None
+
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(df)[0]
+        conf = float(proba[pred])
+
+    # Result
+    result = "Phishing" if pred == 1 else "Safe"
+    
+    # Save to database without user_id (guest mode)
+    _save_history(url, pred, result, conf, explanations, user_id=None)
+    
+    return _build_response(url, result, pred, conf, explanations, top_features)
+
+# -------------------------------------------------
+# HELPERS
 # -------------------------------------------------
 def _save_history(
-    db: Session,
     url: str,
     label: int,
     prediction: str,
     confidence,
     explanations: List[str],
+    user_id: Optional[int] = None
 ):
-    """Helper to save one record into SearchHistory."""
+    """Save search history to database"""
     try:
-        new_search = SearchHistory(
+        record_id = add_search_history(
             url=url,
-            label=label,
+            user_id=user_id,
             prediction=prediction,
             confidence=confidence,
-            explanation=json.dumps(explanations),
+            explanation=json.dumps(explanations)
         )
-        db.add(new_search)
-        db.commit()
+        return record_id
     except Exception as e:
         print(f"[WARN] Failed to save history: {e}")
-
+        return None
 
 def _build_response(
     url: str,
@@ -290,7 +525,7 @@ def _build_response(
     explanations: List[str],
     top_features: List[dict] | None = None,
 ):
-    """Helper to build API JSON response."""
+    """Build API response"""
     return {
         "url": url,
         "prediction": prediction,
@@ -300,98 +535,20 @@ def _build_response(
         "top_features": top_features or [],
     }
 
+# -------------------------------------------------
+# NEW: STATIC FILE SERVING FOR DASHBOARD
+# -------------------------------------------------
+@app.get("/static/{file_path:path}")
+async def serve_static(file_path: str):
+    """Serve static files"""
+    static_path = os.path.join(".", file_path)
+    if os.path.exists(static_path):
+        return FileResponse(static_path)
+    raise HTTPException(status_code=404, detail="File not found")
 
 # -------------------------------------------------
-# VIEW HISTORY ENDPOINT  (frontend uses this to show table)
-# -------------------------------------------------
-@app.get("/history")
-def get_history(limit: int = 50, db: Session = Depends(get_db)):
-    """
-    Return the last N search records as clean JSON.
-    """
-    rows = (
-        db.query(SearchHistory)
-        .order_by(SearchHistory.id.desc())
-        .limit(limit)
-        .all()
-    )
-
-    history_list = []
-    for r in rows:
-        try:
-            expl = json.loads(r.explanation) if r.explanation else []
-        except Exception:
-            expl = [str(r.explanation)]
-
-        history_list.append(
-            {
-                "id": r.id,
-                "url": r.url,
-                "label": r.label,
-                "prediction": r.prediction,
-                "confidence": r.confidence,
-                "explanation": expl,
-                "created_at": getattr(r, "created_at", None),
-            }
-        )
-
-    return {"history": history_list}
-
-
-# -------------------------------------------------
-# CLEAR HISTORY ENDPOINT  (for "Clear History" button)
-# -------------------------------------------------
-@app.delete("/history/clear")
-def clear_history(db: Session = Depends(get_db)):
-    """
-    Delete all records from SearchHistory.
-    Used by frontend 'Clear History' button.
-    """
-    try:
-        db.query(SearchHistory).delete()
-        db.commit()
-        print("[INFO] History table cleared.")
-        return {"status": "ok", "message": "history cleared"}
-    except Exception as e:
-        db.rollback()
-        print(f"[ERROR] Failed to clear history: {e}")
-        raise HTTPException(status_code=500, detail="Failed to clear history")
-
-
-# -------------------------------------------------
-# LOG FRONTEND-DECIDED RESULTS (RULE-BASED)
-# -------------------------------------------------
-@app.post("/history/log")
-def log_frontend_result(item: FrontendLogItem, db: Session = Depends(get_db)):
-    """
-    Save results that were classified as phishing by frontend rules
-    (dash+brand, fake TLD, long URL, etc.).
-    For this project, anything that uses this endpoint is treated as phishing (label=1).
-    """
-    label = 1  # anything using this endpoint is phishing
-
-    try:
-        new_row = SearchHistory(
-            url=item.url,
-            label=label,
-            prediction=item.prediction,          # e.g. "Phishing (frontend dash+brand rule)"
-            confidence=1.0,                      # treat frontend rule as 100% confident
-            explanation=json.dumps(item.explanation or []),
-        )
-        db.add(new_row)
-        db.commit()
-
-        print(f"[INFO] Logged frontend phishing: {item.url} -> {item.prediction}")
-        return {"status": "ok", "message": "saved"}
-    except Exception as e:
-        db.rollback()
-        print(f"[ERROR] Failed to save frontend history: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save frontend history")
-
-
-# -------------------------------------------------
-# RUN (for local and Railway)
+# RUN
 # -------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

@@ -34,6 +34,7 @@
       width: 100%;
       animation: fadeIn 0.5s ease-in;
       border: 1px solid rgba(37, 99, 235, 0.1);
+      position: relative;
     }
 
     @keyframes fadeIn {
@@ -47,8 +48,44 @@
       }
     }
 
+    .user-info {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .username {
+      font-weight: 600;
+      color: #0F172A;
+    }
+
+    .logout-btn {
+      padding: 6px 12px;
+      background: #dc2626;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .logout-btn:hover {
+      background: #b91c1c;
+      transform: translateY(-1px);
+    }
+
     .header {
       margin-bottom: 40px;
+      text-align: center;
     }
 
     .shield-icon {
@@ -589,12 +626,24 @@
       .history-sort {
         padding: 5px 10px;
       }
+
+      .user-info {
+        position: static;
+        justify-content: center;
+        margin-bottom: 20px;
+      }
     }
   </style>
 </head>
 
 <body>
   <div class="container">
+    <!-- User Info & Logout -->
+    <div class="user-info">
+      <span class="username" id="usernameDisplay">User</span>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
     <div class="header">
       <div class="shield-icon">🛡️</div>
       <h1>Phishing Website Detection</h1>
@@ -651,12 +700,41 @@
   </div>
 
   <script>
+    // ==================== AUTHENTICATION ====================
+    const authToken = localStorage.getItem('auth_token');
+    const currentUsername = localStorage.getItem('username');
+
+    // Check if user is logged in
+    if (!authToken) {
+      window.location.href = 'login.html';
+    }
+
+    // Display username
+    if (currentUsername) {
+      document.getElementById('usernameDisplay').textContent = currentUsername;
+    }
+
+    // Logout function
+    function logout() {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('username');
+      window.location.href = 'login.html';
+    }
+
+    // ==================== API CONFIGURATION ====================
     const API_BASE = window.location.origin;
     const API_PREDICT = `${API_BASE}/predict`;
     const API_HISTORY = `${API_BASE}/history`;
     const API_HISTORY_LOG = `${API_BASE}/history/log`;
     const API_HISTORY_CLEAR = `${API_BASE}/history/clear`;
 
+    // Common headers for all authenticated requests
+    const getAuthHeaders = () => ({
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${authToken}`
+    });
+
+    // ==================== CORE FUNCTIONS ====================
     let allHistoryRows = [];
     let sortMode = "desc";
     let currentPage = 1;
@@ -672,7 +750,7 @@
       try {
         await fetch(API_HISTORY_LOG, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             url: url,
             prediction: predictionText,
@@ -934,7 +1012,7 @@
       try {
         const response = await fetch(API_PREDICT, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ url })
         });
 
@@ -944,6 +1022,11 @@
         checkBtn.classList.remove("checking");
 
         if (!response.ok) {
+          if (response.status === 401) {
+            // Token expired, redirect to login
+            logout();
+            return;
+          }
           const text = await response.text();
           resultDiv.className = "danger show";
           resultDiv.innerHTML = `<span class="icon">❌</span>Error ${response.status}: ${text}`;
@@ -1073,11 +1156,19 @@
     }
 
     async function clearHistory() {
-      if (!confirm("Are you sure? This will delete ALL history.")) return;
+      if (!confirm("Are you sure? This will delete ALL your history.")) return;
 
       try {
-        await fetch(API_HISTORY_CLEAR, { method: "DELETE" });
-        loadHistory();
+        const response = await fetch(API_HISTORY_CLEAR, { 
+          method: "DELETE",
+          headers: getAuthHeaders()
+        });
+        
+        if (response.ok) {
+          loadHistory();
+        } else {
+          alert("Failed to clear history.");
+        }
       } catch (e) {
         alert("Failed to clear history in backend.");
       }
@@ -1210,8 +1301,15 @@
       const tbody = document.getElementById("historyBody");
 
       try {
-        const res = await fetch(API_HISTORY);
+        const res = await fetch(API_HISTORY, {
+          headers: getAuthHeaders()
+        });
+        
         if (!res.ok) {
+          if (res.status === 401) {
+            logout();
+            return;
+          }
           const text = await res.text();
           tbody.innerHTML = `
             <tr>
