@@ -53,7 +53,7 @@ app.add_middleware(
 # MODEL LOADING
 # -------------------------------------------------
 model = None
-MODEL_COLUMNS: List[str] | None = None
+MODEL_COLUMNS = None
 load_err = ""
 
 try:
@@ -63,18 +63,8 @@ try:
     print(f"[INFO] Loaded model with {len(MODEL_COLUMNS)} columns.")
 except Exception as e:
     load_err = str(e)
-    print(f"[ERROR] Failed to load model: {load_err}")
-
-
-def to_model_frame(features_dict: dict) -> pd.DataFrame:
-    if MODEL_COLUMNS is None:
-        raise RuntimeError("Model columns not loaded.")
-    
-    df = pd.DataFrame([features_dict])
-    for c in MODEL_COLUMNS:
-        if c not in df.columns:
-            df[c] = 0
-    return df[MODEL_COLUMNS]
+    print(f"[WARNING] Failed to load model: {load_err}")
+    print("[INFO] Running in fallback mode - using basic URL checks only")
 
 # -------------------------------------------------
 # AUTHENTICATION ENDPOINTS (UPDATED FOR SQLITE)
